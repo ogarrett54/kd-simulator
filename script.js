@@ -1,9 +1,13 @@
 const maxVelocity = 2;
 
 const numOfReceptors = 30;
+const receptorColor = "white";
+const receptorSize = 5; // used as radius and mass
 const receptorArray = [];
 
 const numOfLigands = 300;
+const ligandColor = "red";
+const ligandSize = 2; // used as radius and mass
 const ligandArray = [];
 
 let canvas;
@@ -23,12 +27,12 @@ window.addEventListener("resize", function () {
   canvas.height = window.innerHeight;
 });
 
-class Receptor {
+class Molecule {
   constructor(x, y, max_v) {
     this.x = x;
     this.y = y;
-    this.size = 5; // used as radius and mass
-    this.color = "white";
+    this.size = 5; // default, will be changed
+    this.color = "white"; // default, will be changed
     this.vx = Math.random() * max_v - max_v / 2;
     this.vy = Math.random() * max_v - max_v / 2;
   }
@@ -53,33 +57,19 @@ class Receptor {
   }
 }
 
-class Ligand {
-  constructor(x, y, max_v) {
-    this.x = x;
-    this.y = y;
-    this.size = 1; // used as radius and mass
-    this.color = "red";
-    this.vx = Math.random() * max_v - max_v / 2;
-    this.vy = Math.random() * max_v - max_v / 2;
+class Receptor extends Molecule {
+  constructor(x, y, max_v, color, size) {
+    super(x, y, max_v);
+    this.color = color;
+    this.size = size;
   }
+}
 
-  update() {
-    this.x += this.vx;
-    this.y += this.vy;
-
-    if (this.x > canvas.width) this.x = 0;
-    if (this.x < 0) this.x = canvas.width;
-    if (this.y > canvas.height) this.y = 0;
-    if (this.y < 0) this.y = canvas.height;
-  }
-
-  draw() {
-    ctx.fillStyle = this.color;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
+class Ligand extends Molecule {
+  constructor(x, y, max_v, color, size) {
+    super(x, y, max_v);
+    this.color = color;
+    this.size = size;
   }
 }
 
@@ -87,13 +77,15 @@ function init(n_receptors, n_ligands) {
   for (let i = 0; i < n_receptors; i++) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    receptorArray.push(new Receptor(x, y, maxVelocity));
+    receptorArray.push(
+      new Receptor(x, y, maxVelocity, receptorColor, receptorSize)
+    );
   }
 
   for (let i = 0; i < n_ligands; i++) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    ligandArray.push(new Ligand(x, y, maxVelocity));
+    ligandArray.push(new Ligand(x, y, maxVelocity, ligandColor, ligandSize));
   }
 }
 
