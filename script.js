@@ -1,7 +1,10 @@
 const maxVelocity = 2;
 
-const numOfReceptors = 50;
-const receptorsArray = [];
+const numOfReceptors = 30;
+const receptorArray = [];
+
+const numOfLigands = 300;
+const ligandArray = [];
 
 let canvas;
 let ctx;
@@ -11,7 +14,7 @@ window.onload = function () {
   ctx = canvas.getContext("2d");
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  init(numOfReceptors);
+  init(numOfReceptors, numOfLigands);
   animate();
 };
 
@@ -24,8 +27,7 @@ class Receptor {
   constructor(x, y, max_v) {
     this.x = x;
     this.y = y;
-    this.mass = 1;
-    this.radius = 5;
+    this.size = 5; // used as radius and mass
     this.color = "white";
     this.vx = Math.random() * max_v - max_v / 2;
     this.vy = Math.random() * max_v - max_v / 2;
@@ -44,26 +46,67 @@ class Receptor {
   draw() {
     ctx.fillStyle = this.color;
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
     ctx.closePath();
     ctx.stroke();
     ctx.fill();
   }
 }
 
-function init(n_receptors) {
+class Ligand {
+  constructor(x, y, max_v) {
+    this.x = x;
+    this.y = y;
+    this.size = 1; // used as radius and mass
+    this.color = "red";
+    this.vx = Math.random() * max_v - max_v / 2;
+    this.vy = Math.random() * max_v - max_v / 2;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+
+    if (this.x > canvas.width) this.x = 0;
+    if (this.x < 0) this.x = canvas.width;
+    if (this.y > canvas.height) this.y = 0;
+    if (this.y < 0) this.y = canvas.height;
+  }
+
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fill();
+  }
+}
+
+function init(n_receptors, n_ligands) {
   for (let i = 0; i < n_receptors; i++) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    receptorsArray.push(new Receptor(x, y, maxVelocity));
+    receptorArray.push(new Receptor(x, y, maxVelocity));
+  }
+
+  for (let i = 0; i < n_ligands; i++) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    ligandArray.push(new Ligand(x, y, maxVelocity));
   }
 }
 
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (r of receptorsArray) {
+  for (r of receptorArray) {
     r.update();
     r.draw();
+  }
+
+  for (l of ligandArray) {
+    l.update();
+    l.draw();
   }
 
   requestAnimationFrame(animate);
