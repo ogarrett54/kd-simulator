@@ -1,20 +1,31 @@
 // TODO:
 // Implement "Kd" slider
-// Implement fraction bound logging
+// Implement temperature slider
 
-const maxVelocity = 2;
-const chanceToBind = 0.1;
+// Initial max velocity
+const maxVelocity = 5;
 
+// Interaction properties
+const chanceToBind = 0.9;
+
+// Outside heating properties
+const percentOfSystemToPerturb = 0.05;
+const heatingFactor = 0.4;
+
+// Receptor properties
 const receptorColor = "white";
 const receptorSize = 5; // used as radius and mass
 const receptorArray = [];
 
+// Ligand properites
 const ligandColor = "red";
 const ligandSize = 2; // used as radius and mass
 const ligandArray = [];
 
 let canvas;
 let ctx;
+let initialKE;
+let Etarget;
 
 window.onload = function () {
   canvas = document.getElementById("canvas1");
@@ -75,7 +86,12 @@ window.onload = function () {
   });
 
   init(numOfReceptors, numOfLigands);
+
+  initialKE = calculateTotalKineticEnergy();
+  Etarget = initialKE / (receptorArray.length + ligandArray.length);
+
   animate();
+  setInterval(logFractionBound, 500);
 };
 
 window.addEventListener("resize", function () {
@@ -97,10 +113,27 @@ class Molecule {
     this.x += this.vx;
     this.y += this.vy;
 
-    if (this.x > canvas.width) this.x = 0;
-    if (this.x < 0) this.x = canvas.width;
-    if (this.y > canvas.height) this.y = 0;
-    if (this.y < 0) this.y = canvas.height;
+    // wall collisions - ChatGPT refined
+    // Right wall
+    if (this.x + this.size > canvas.width) {
+      this.vx *= -1;
+      this.x = canvas.width - this.size;
+    }
+    // Left wall
+    if (this.x - this.size < 0) {
+      this.vx *= -1;
+      this.x = this.size;
+    }
+    // Bottom wall
+    if (this.y + this.size > canvas.height) {
+      this.vy *= -1;
+      this.y = canvas.height - this.size;
+    }
+    // Top wall
+    if (this.y - this.size < 0) {
+      this.vy *= -1;
+      this.y = this.size;
+    }
   }
 
   draw() {
@@ -129,6 +162,10 @@ class Ligand extends Molecule {
     this.size = size;
     this.inComplex = false;
   }
+  updateColor() {
+    if (this.inComplex) this.color = "orange";
+    if (!this.inComplex) this.color = "red";
+  }
 }
 
 function init(n_receptors, n_ligands) {
@@ -156,9 +193,11 @@ function animate() {
 
   for (l of ligandArray) {
     l.update();
+    l.updateColor();
     l.draw();
   }
   handleCollisions();
+  reheatSystem();
   requestAnimationFrame(animate);
 }
 
@@ -183,6 +222,8 @@ function getReceptorLigandCollisions(
   bindCollisionArray,
   chanceToBind
 ) {
+  for (const r of receptorArray) r.inComplex = false;
+  for (const l of ligandArray) l.inComplex = false;
   for (r of receptorArray) {
     for (l of ligandArray) {
       const distance = Math.hypot(r.x - l.x, r.y - l.y);
@@ -190,8 +231,6 @@ function getReceptorLigandCollisions(
       if (distance < r.size + l.size) {
         if (!bind) {
           noBindCollisionArray.push([r, l]);
-          r.inComplex = false;
-          l.inComplex = false;
         }
         if (bind && !r.inComplex && !l.inComplex) {
           bindCollisionArray.push([r, l]);
@@ -291,4 +330,63 @@ function resolveInelasticCollision(obj1, obj2) {
   // They now share the same velocity
   obj1.vx = obj2.vx = vx;
   obj1.vy = obj2.vy = vy;
+}
+
+function logFractionBound() {
+  let counter = 0;
+  for (r of receptorArray) {
+    if (r.inComplex) counter++;
+  }
+  const fBound = Math.round((counter / receptorArray.length) * 100) / 100;
+  const fBoundLogger = document.getElementById("frac-bound-logger");
+  fBoundLogger.textContent = `Fraction bound: ${fBound}`;
+}
+
+function calculateTotalKineticEnergy() {
+  let totalKineticEnergy = 0;
+  for (r of receptorArray) {
+    totalKineticEnergy += calculateKineticEnergy(r);
+  }
+  for (l of ligandArray) {
+    totalKineticEnergy += calculateKineticEnergy(l);
+  }
+
+  return totalKineticEnergy;
+}
+
+function calculateKineticEnergy(mol) {
+  return 0.5 * mol.size * (mol.vx ** 2 + mol.vy ** 2);
+}
+
+function reheatSystem() {
+  const numPerturbedReceptors = Math.round(
+    percentOfSystemToPerturb * receptorArray.length
+  );
+  const selectedReceptorIndices = [];
+  for (let i = 0; i < numPerturbedReceptors; i++)
+    selectedReceptorIndices.push(
+      Math.floor(Math.random() * receptorArray.length)
+    );
+
+  const numPerturbedLigands = Math.round(
+    percentOfSystemToPerturb * ligandArray.length
+  );
+  const selectedLigandIndices = [];
+  for (let i = 0; i < numPerturbedLigands; i++)
+    selectedLigandIndices.push(Math.floor(Math.random() * ligandArray.length));
+
+  for (let i = 0; i < selectedReceptorIndices.length; i++) {
+    const r = receptorArray[selectedReceptorIndices[i]];
+    //Ecurrent = calculateKineticEnergy(r);
+    //scale = Math.sqrt(Etarget/Ecurrent);
+    r.vx += heatingFactor * (Math.random() * 2 - 1);
+    r.vy += heatingFactor * (Math.random() * 2 - 1);
+  }
+  for (let i = 0; i < selectedLigandIndices.length; i++) {
+    const l = ligandArray[selectedLigandIndices[i]];
+    //Ecurrent = calculateKineticEnergy(l);
+    //scale = Math.sqrt(Etarget/Ecurrent);
+    l.vx += heatingFactor * (Math.random() * 2 - 1);
+    l.vy += heatingFactor * (Math.random() * 2 - 1);
+  }
 }
