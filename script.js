@@ -28,6 +28,10 @@ let ctx;
 let initialKE;
 let Etarget;
 let chanceToBind;
+let nCol;
+let nRow;
+let grid;
+let cellSize;
 
 window.onload = function () {
   canvas = document.getElementById("canvas1");
@@ -35,11 +39,26 @@ window.onload = function () {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
+  // Grid binning for performance enhancement
+  cellSize = receptorSize * 2;
+  nCol = Math.round(window.innerWidth / cellSize);
+  nRow = Math.round(window.innerHeight / cellSize);
+
+  grid = [];
+  for (let row = 0; row < nRow; row++) {
+    grid[row] = [];
+    for (let col = 0; col < nCol; col++) {
+      grid[row][col] = [];
+    }
+  }
+
   const receptorInput = document.getElementById("receptor-conc");
   let numOfReceptors = Number(receptorInput.value);
+  if (isNaN(numOfReceptors) || numOfReceptors < 0) numOfReceptors = 50; // sensible default
 
   receptorInput.addEventListener("change", function () {
-    const newNumOfReceptors = receptorInput.value;
+    const newNumOfReceptors = Number(receptorInput.value);
+    if (isNaN(numOfReceptors)) numOfReceptors = 50;
     const dR = newNumOfReceptors - numOfReceptors;
     if (dR > 0) {
       for (let i = 0; i < dR; i++) {
@@ -53,8 +72,6 @@ window.onload = function () {
 
     if (dR < 0) {
       for (let i = 0; i < -dR; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
         receptorArray.pop();
       }
     }
@@ -64,9 +81,11 @@ window.onload = function () {
 
   const ligandInput = document.getElementById("ligand-conc");
   let numOfLigands = Number(ligandInput.value);
+  if (isNaN(numOfLigands) || numOfLigands < 0) numOfLigands = 100;
 
   ligandInput.addEventListener("change", function () {
-    const newNumOfLigands = ligandInput.value;
+    const newNumOfLigands = Number(ligandInput.value);
+    if (isNaN(numOfLigands)) numOfLigands = 100;
     const dL = newNumOfLigands - numOfLigands;
     if (dL > 0) {
       for (let i = 0; i < dL; i++) {
@@ -80,8 +99,6 @@ window.onload = function () {
 
     if (dL < 0) {
       for (let i = 0; i < -dL; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
         ligandArray.pop();
       }
     }
@@ -93,7 +110,9 @@ window.onload = function () {
   chanceToBind = 1 - Number(KdInput.value) / 1000;
 
   KdInput.addEventListener("change", function () {
-    chanceToBind = 1 - Number(KdInput.value) / 1000;
+    let kdValue = Number(KdInput.value);
+    if (isNaN(kdValue)) kdValue = 100; // or your default
+    chanceToBind = 1 - kdValue / 1000;
   });
 
   init(numOfReceptors, numOfLigands);
@@ -196,15 +215,33 @@ function init(n_receptors, n_ligands) {
 
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (r of receptorArray) {
-    r.update();
-    r.draw();
+  for (let row = 0; row < nRow; row++) {
+    for (let col = 0; col < nCol; col++) {
+      grid[row][col].length = 0;
+    }
   }
 
-  for (l of ligandArray) {
+  for (const r of receptorArray) {
+    r.update();
+    r.draw();
+
+    const row = Math.min(nRow - 1, Math.max(0, Math.floor(r.y / cellSize)));
+    const col = Math.min(nCol - 1, Math.max(0, Math.floor(r.x / cellSize)));
+
+    if (isNaN(row) || isNaN(col)) {
+      console.error("NaN row or col", r, r.x, r.y, cellSize, nRow, nCol);
+    }
+    grid[row][col].push(r);
+  }
+
+  for (const l of ligandArray) {
     l.update();
     l.updateColor();
     l.draw();
+
+    const row = Math.min(nRow - 1, Math.max(0, Math.floor(l.y / cellSize)));
+    const col = Math.min(nCol - 1, Math.max(0, Math.floor(l.x / cellSize)));
+    grid[row][col].push(l);
   }
   handleCollisions();
   if (calculateTotalKineticEnergy() < initialKE) reheatSystem();
@@ -227,6 +264,9 @@ function handleCollisions() {
   }
 }
 
+// ─────────────────────────────────────────────────────────
+// Receptor–Ligand (revised by ChatGPT)
+// ─────────────────────────────────────────────────────────
 function getReceptorLigandCollisions(
   noBindCollisionArray,
   bindCollisionArray,
@@ -234,54 +274,160 @@ function getReceptorLigandCollisions(
 ) {
   for (const r of receptorArray) r.inComplex = false;
   for (const l of ligandArray) l.inComplex = false;
-  for (r of receptorArray) {
-    for (l of ligandArray) {
-      const distance = Math.hypot(r.x - l.x, r.y - l.y);
-      const bind = Math.random() < chanceToBind;
-      if (distance < r.size + l.size) {
-        if (!bind) {
-          noBindCollisionArray.push([r, l]);
-        }
-        if (bind && !r.inComplex && !l.inComplex) {
-          bindCollisionArray.push([r, l]);
-          r.inComplex = true;
-          l.inComplex = true;
+
+  for (const r of receptorArray) {
+    const row = Math.min(nRow - 1, Math.max(0, Math.floor(r.y / cellSize)));
+    const col = Math.min(nCol - 1, Math.max(0, Math.floor(r.x / cellSize)));
+
+    // scan this cell and the 8 neighbours
+    for (let dr = -1; dr <= 1; dr++) {
+      const rN = row + dr;
+      if (rN < 0 || rN >= nRow) continue;
+
+      for (let dc = -1; dc <= 1; dc++) {
+        const cN = col + dc;
+        if (cN < 0 || cN >= nCol) continue;
+
+        for (const l of grid[rN][cN]) {
+          const distance = Math.hypot(r.x - l.x, r.y - l.y);
+          if (distance >= r.size + l.size) continue;
+
+          const bind = Math.random() < chanceToBind;
+          if (!bind) {
+            noBindCollisionArray.push([r, l]);
+          } else if (!r.inComplex && !l.inComplex) {
+            bindCollisionArray.push([r, l]);
+            r.inComplex = l.inComplex = true;
+          }
         }
       }
     }
   }
 }
 
+// ─────────────────────────────────────────────────────────
+// Receptor–Receptor (revised by ChatGPT)
+// ─────────────────────────────────────────────────────────
 function getReceptorReceptorCollisions(collisionArray) {
-  for (let i = 0; i < receptorArray.length; i++) {
-    for (let j = i + 1; j < receptorArray.length; j++) {
-      let r1 = receptorArray[i];
-      let r2 = receptorArray[j];
-      const distance = Math.hypot(r1.x - r2.x, r1.y - r2.y);
-      if (distance < r1.size + r2.size) {
-        collisionArray.push([r1, r2]);
+  for (const r1 of receptorArray) {
+    const row = Math.min(nRow - 1, Math.max(0, Math.floor(r1.y / cellSize)));
+    const col = Math.min(nCol - 1, Math.max(0, Math.floor(r1.x / cellSize)));
+
+    for (let dr = -1; dr <= 1; dr++) {
+      const rN = row + dr;
+      if (rN < 0 || rN >= nRow) continue;
+
+      for (let dc = -1; dc <= 1; dc++) {
+        const cN = col + dc;
+        if (cN < 0 || cN >= nCol) continue;
+
+        for (const r2 of grid[rN][cN]) {
+          if (r2 === r1) continue; // skip self
+          const distance = Math.hypot(r1.x - r2.x, r1.y - r2.y);
+          if (distance < r1.size + r2.size) {
+            collisionArray.push([r1, r2]);
+          }
+        }
       }
     }
   }
 }
 
+// ─────────────────────────────────────────────────────────
+// Ligand–Ligand (revised by ChatGPT)
+// ─────────────────────────────────────────────────────────
 function getLigandLigandCollisions(collisionArray) {
-  for (let i = 0; i < ligandArray.length; i++) {
-    for (let j = i + 1; j < ligandArray.length; j++) {
-      let l1 = ligandArray[i];
-      let l2 = ligandArray[j];
-      const distance = Math.hypot(l1.x - l2.x, l1.y - l2.y);
-      if (distance < l1.size + l2.size) {
-        collisionArray.push([l1, l2]);
+  for (const l1 of ligandArray) {
+    const row = Math.min(nRow - 1, Math.max(0, Math.floor(l1.y / cellSize)));
+    const col = Math.min(nCol - 1, Math.max(0, Math.floor(l1.x / cellSize)));
+
+    for (let dr = -1; dr <= 1; dr++) {
+      const rN = row + dr;
+      if (rN < 0 || rN >= nRow) continue;
+
+      for (let dc = -1; dc <= 1; dc++) {
+        const cN = col + dc;
+        if (cN < 0 || cN >= nCol) continue;
+
+        for (const l2 of grid[rN][cN]) {
+          if (l2 === l1) continue;
+          const distance = Math.hypot(l1.x - l2.x, l1.y - l2.y);
+          if (distance < l1.size + l2.size) {
+            collisionArray.push([l1, l2]);
+          }
+        }
       }
     }
   }
 }
+
+//function getReceptorLigandCollisions(
+//  noBindCollisionArray,
+//  bindCollisionArray,
+//  chanceToBind
+//) {
+//  for (const r of receptorArray) r.inComplex = false;
+//  for (const l of ligandArray) l.inComplex = false;
+//  for (const r of receptorArray) {
+//    const row = Math.min(nRow - 1, Math.max(0, Math.floor(r.y / cellSize)));
+//    const col = Math.min(nCol - 1, Math.max(0, Math.floor(r.x / cellSize)));
+//    for (const l of grid[row][col]) {
+//      const distance = Math.hypot(r.x - l.x, r.y - l.y);
+//      const bind = Math.random() < chanceToBind;
+//      if (distance < r.size + l.size) {
+//        if (!bind) {
+//          noBindCollisionArray.push([r, l]);
+//        }
+//        if (bind && !r.inComplex && !l.inComplex) {
+//          bindCollisionArray.push([r, l]);
+//          r.inComplex = true;
+//          l.inComplex = true;
+//        }
+//      }
+//    }
+//  }
+//}
+//
+//function getReceptorReceptorCollisions(collisionArray) {
+//  for (const r1 of receptorArray) {
+//    const row = Math.min(nRow - 1, Math.max(0, Math.floor(r1.y / cellSize)));
+//    const col = Math.min(nCol - 1, Math.max(0, Math.floor(r1.x / cellSize)));
+//    for (const r2 of grid[row][col]) {
+//      if (r2 !== r1) {
+//        const distance = Math.hypot(r1.x - r2.x, r1.y - r2.y);
+//        if (distance < r1.size + r2.size) {
+//          collisionArray.push([r1, r2]);
+//        }
+//      }
+//    }
+//  }
+//}
+//
+//function getLigandLigandCollisions(collisionArray) {
+//  for (const l1 of ligandArray) {
+//    const row = Math.min(nRow - 1, Math.max(0, Math.floor(l1.y / cellSize)));
+//    const col = Math.min(nCol - 1, Math.max(0, Math.floor(l1.x / cellSize)));
+//    for (const l2 of grid[row][col]) {
+//      if (l2 !== l1) {
+//        const distance = Math.hypot(l1.x - l2.x, l1.y - l2.y);
+//        if (distance < l1.size + l2.size) {
+//          collisionArray.push([l1, l2]);
+//        }
+//      }
+//    }
+//  }
+//}
 
 // written by ChatGPT
 function resolveElasticCollision(obj1, obj2) {
   const dx = obj2.x - obj1.x;
   const dy = obj2.y - obj1.y;
+
+  // Bail out if the centres are coincident – give them a tiny nudge instead
+  if (dx === 0 && dy === 0) {
+    obj1.x += 0.01; // any tiny value > 0 works
+    return; // skip the rest this frame
+  }
 
   // Normalize the collision vector
   const distance = Math.hypot(dx, dy);
