@@ -33,6 +33,11 @@ label[for='receptor-conc'] {
     top: 30px;
 }
 
+label[for='Kd'] {
+    left: 10px;
+    top: 60px;
+}
+
 input {
     position: absolute;
 }
@@ -45,6 +50,11 @@ input {
 #receptor-conc {
     left: 40px;
     top: 35px;
+}
+
+#Kd {
+    left: 40px;
+    top: 65px;
 }
 
 input[type=range] {
@@ -82,5 +92,5 @@ input[type=range]::-webkit-slider-runnable-track {
 #frac-bound-logger {
     position: absolute;
     color: white;
-    right: 50px;
+    right: 10px;
 }

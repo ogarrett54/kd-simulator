@@ -5,9 +5,6 @@
 // Initial max velocity
 const maxVelocity = 5;
 
-// Interaction properties
-const chanceToBind = 0.9;
-
 // Outside heating properties
 const percentOfSystemToPerturb = 0.05;
 const heatingFactor = 0.4;
@@ -22,10 +19,15 @@ const ligandColor = "red";
 const ligandSize = 2; // used as radius and mass
 const ligandArray = [];
 
+// Data logging
+const fractionBoundArray = [];
+const smoothingFactor = 10;
+
 let canvas;
 let ctx;
 let initialKE;
 let Etarget;
+let chanceToBind;
 
 window.onload = function () {
   canvas = document.getElementById("canvas1");
@@ -57,6 +59,7 @@ window.onload = function () {
       }
     }
     numOfReceptors = newNumOfReceptors;
+    initialKE = calculateTotalKineticEnergy();
   });
 
   const ligandInput = document.getElementById("ligand-conc");
@@ -83,12 +86,19 @@ window.onload = function () {
       }
     }
     numOfLigands = newNumOfLigands;
+    initialKE = calculateTotalKineticEnergy();
+  });
+
+  const KdInput = document.getElementById("Kd");
+  chanceToBind = 1 - Number(KdInput.value) / 1000;
+
+  KdInput.addEventListener("change", function () {
+    chanceToBind = 1 - Number(KdInput.value) / 1000;
   });
 
   init(numOfReceptors, numOfLigands);
 
   initialKE = calculateTotalKineticEnergy();
-  Etarget = initialKE / (receptorArray.length + ligandArray.length);
 
   animate();
   setInterval(logFractionBound, 500);
@@ -197,7 +207,7 @@ function animate() {
     l.draw();
   }
   handleCollisions();
-  reheatSystem();
+  if (calculateTotalKineticEnergy() < initialKE) reheatSystem();
   requestAnimationFrame(animate);
 }
 
@@ -337,9 +347,23 @@ function logFractionBound() {
   for (r of receptorArray) {
     if (r.inComplex) counter++;
   }
-  const fBound = Math.round((counter / receptorArray.length) * 100) / 100;
+  const fBound = counter / receptorArray.length;
+
+  if (fractionBoundArray.length < smoothingFactor) {
+    fractionBoundArray.push(fBound);
+  } else {
+    fractionBoundArray.push(fBound);
+    fractionBoundArray.splice(0, 1);
+  }
+
+  const avgFBound =
+    fractionBoundArray.reduce((sum, val) => sum + val, 0) /
+    fractionBoundArray.length;
+
+  const rounded = Math.round(avgFBound * 100) / 100;
+
   const fBoundLogger = document.getElementById("frac-bound-logger");
-  fBoundLogger.textContent = `Fraction bound: ${fBound}`;
+  fBoundLogger.textContent = `Fraction bound: ${rounded}`;
 }
 
 function calculateTotalKineticEnergy() {
