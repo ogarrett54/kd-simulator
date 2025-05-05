@@ -1,7 +1,3 @@
-// TODO:
-// Implement "Kd" slider
-// Implement temperature slider
-
 // Initial max velocity
 const maxVelocity = 5;
 
@@ -41,8 +37,8 @@ window.onload = function () {
 
   // Grid binning for performance enhancement
   cellSize = receptorSize * 2;
-  nCol = Math.round(window.innerWidth / cellSize);
-  nRow = Math.round(window.innerHeight / cellSize);
+  nCol = Math.round(canvas.width / cellSize);
+  nRow = Math.round(canvas.height / cellSize);
 
   grid = [];
   for (let row = 0; row < nRow; row++) {
@@ -126,6 +122,17 @@ window.onload = function () {
 window.addEventListener("resize", function () {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+
+  nCol = Math.round(canvas.width / cellSize);
+  nRow = Math.round(canvas.height / cellSize);
+
+  grid = [];
+  for (let row = 0; row < nRow; row++) {
+    grid[row] = [];
+    for (let col = 0; col < nCol; col++) {
+      grid[row][col] = [];
+    }
+  }
 });
 
 class Molecule {
